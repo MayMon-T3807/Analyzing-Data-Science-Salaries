@@ -1,0 +1,811 @@
+---
+title: "Project Report_Data Science Salaries_2020 to 2024"
+author: "May Mon Thant, Nyein Min Soe, Thant Sin Tun, Thiri Win"
+date: "2024-12-09"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+## Project Overview
+
+The purpose of analyzing data science salaries from 2020 to 2024 with R language is to provide comprehensive insights into the evolving landscape of compensation within the data science field during a period of significant technological and economic transformation. This research project aims to uncover trends in salary progression, identify factors influencing compensation such as specialized skills, geographic location,and industry sector. By tracking salary data across these four critical years—which encompass the global pandemic, rapid technological advancements, and significant shifts in remote work culture—the study would offer valuable information for professionals, employers, educational institutions, and career planners. The analysis can reveal how different specializations within data science (such as machine learning engineers, data analysts, AI researchers) have been valued, how compensation has responded to changes in demand, and potentially predict future trends in data science career development and compensation strategies.
+
+## Analytical Question
+How do salaries vary by employee residence, experience level, employment types, job titles, remote ratio and company location? Are there specific regions that offer higher salaries for data science roles?
+What are the key predictions for the future of the data science field, and what recommendations can be made for aspiring data scientists to align with these trends?
+
+
+# Dataset Explanation
+
+The dataset covers 2020-2023 data science salaries from countries like India, Japan, Hungary, Chile, and the US. Roles range from entry-level to executive, with salaries ($17,684–$95,386) converted to USD. It includes on-site, hybrid, and remote jobs across small to large companies, highlighting global trends and evolving roles like AI Programmer and Data Science Manager.
+
+## 1. Data Import
+We start by importing the dataset using the `read.csv()` function.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(corrplot)
+library(scales)
+library(readxl)
+library(maps)
+library(ggthemes)
+library(countrycode)
+library(scales) 
+library(glmnet)
+library(gridExtra)
+```
+
+
+```{r}
+library(readr)
+salary_df <- read_csv("C:/Users/User/Desktop/R Final Project/DataScience_salaries_2024.csv")
+head(salary_df)
+```
+```{r}
+str(salary_df)
+
+```
+```{r}
+# Summary statistics
+summary(salary_df)
+```
+The result of summary statistics shows that :
+
+for the work year the median and mean are both around 2023, suggesting that most data points are centered around 2023.
+
+Min: 14,000 (the lowest salary recorded in the dataset).
+1st Qu. (25%): 102,100, indicating that 25% of salaries are below this amount.
+Median (50%): 142,200, which means half the salaries are below and half are above this value.
+Mean: 165,023, which is higher than the median, suggesting a right-skewed distribution (i.e., a few high salaries are pulling the average up).
+Max: 30,400,000, showing a significant gap between the maximum and the lower end of the distribution. This indicates the presence of some very high salaries.
+
+The salary_in_usd column seems to be a conversion of the salary to USD, and the distribution is similar to the salary variable, with a relatively high mean compared to the median, suggesting a skewed distribution.
+
+For the most common salary type we can check with table function
+
+```{r}
+table(salary_df$salary_currency)
+```
+
+
+For the remote ration column, remote_ratio:
+Min: 0, indicating that some employees do not work remotely.
+1st Qu. (25%): 0, meaning 25% of employees do not work remotely.
+Median (50%): 0, indicating that half of the employees are not working remotely.
+Mean: 32.76, showing that, on average, employees work remotely 32.76% of the time.
+Max: 100, showing that some employees work entirely remotely.
+
+
+By the summary statistics, we can see that the dataset contains 14,838 records of employee salaries, job titles, and company details.
+The salaries are mostly clustered around 100,000 to 200,000 USD, but there are extreme values, with some salaries going up to 30 million.
+The dataset covers a variety of experience levels, employment types, and job titles.
+A large portion of employees works remotely, with many working entirely from home. The salary distribution is skewed to the right, with a few extremely high salaries.The dataset shows that many employees work remotely (with a mean remote ratio of around 32.76%).
+Companies might be adjusting their policies to allow more flexibility in terms of remote work, as reflected in this dataset.
+
+
+
+```{r}
+table(salary_df$employment_type)
+```
+By checking the employment type we can see that employees are mostly working on full time job. This means that full-time job opportunity is much more than contract, freelance, and part-time.
+
+
+```{r}
+table(salary_df$experience_level)
+```
+There are different levels working in the data science field. 
+
+## Data Cleaning
+
+```{r}
+# Check for missing values
+colSums(is.na(salary_df))
+```
+This step is for data cleaning checking if our data set contains null value or not.
+
+
+ For the data cleaning steps, we have also added removing outiers steps to make sure that there is no outlier in building model.
+
+
+```{r}
+# Basic statistics for salary in USD
+salary_stats_summary <- salary_df %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    min_salary = min(salary_in_usd),
+    max_salary = max(salary_in_usd),
+    sd_salary = sd(salary_in_usd)
+  )
+
+salary_stats_summary
+
+# Calculate the IQR for the salary_in_usd
+Q1 <- quantile(salary_df$salary_in_usd, 0.25)
+Q3 <- quantile(salary_df$salary_in_usd, 0.75)
+IQR <- Q3 - Q1
+
+# Define the lower and upper bounds for outliers
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# Remove outliers
+salary_df <- salary_df %>% filter(salary_in_usd >= lower_bound & salary_in_usd <= upper_bound)
+
+print(head(salary_df))
+
+# Visualize the data to get better understanding
+
+# Calculate average salary by experience level
+
+avg_salary_experience <- aggregate(salary_in_usd ~ experience_level, data = salary_df, FUN = mean)
+print(avg_salary_experience)
+
+
+# Create a bar plot to visualize 
+
+experience_labels <- c('Entry', 'Expert', 'Mid-level', 'Senior')
+
+# Use the full names as labels in the barplot
+barplot(avg_salary_experience$salary_in_usd,
+        names.arg = experience_labels, 
+        main = 'Average Salary by Experience Level',
+        xlab = 'Experience Level',
+        ylab = 'Average Salary in USD',
+        col = 'lightgreen',
+        las = 1,
+        cex.names = 1,
+        cex.lab = 0.8,  
+        cex.main = 1.2, 
+        cex.axis = 0.5
+)
+
+
+
+```
+
+Each of the plot shows the outlier removing steps. In the initial data preprocessing stage, a comprehensive statistical summary was conducted to understand the salary distribution. The basic statistical analysis began by calculating key descriptive statistics, including the mean, median, minimum, maximum, and standard deviation of salaries in USD. This initial overview provided crucial insights into the central tendencies and spread of the salary data.
+A critical step in data cleaning involved identifying and removing outliers using the Interquartile Range (IQR) method. This technique is a robust approach to detecting unusual values that might skew the analysis. The process first calculated the first quartile (Q1) and third quartile (Q3) of the salary distribution. The Interquartile Range was then computed by subtracting Q1 from Q3, which provides a measure of statistical dispersion.
+To define outliers, the analysis used a standard statistical approach of identifying values that fall below Q1 - 1.5 * IQR or above Q3 + 1.5 * IQR. This method creates lower and upper bounds that effectively filter out extreme values that could potentially distort the subsequent analysis. By removing these outliers, the dataset becomes more representative of the typical salary distribution, reducing the impact of anomalous data points.
+Following the outlier removal, the analysis visualized the salary distribution through a histogram, which helps in understanding the data's underlying structure. Additionally, the research aggregated average salaries by experience level, creating a bar plot to illustrate how compensation varies across different stages of professional experience. This approach not only cleans the data but also provides meaningful insights into salary patterns, ensuring a more accurate and reliable statistical analysis.
+
+```{r}
+# Basic statistics for salary in USD
+salary_stats_summary <- salary_df %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    min_salary = min(salary_in_usd),
+    max_salary = max(salary_in_usd),
+    sd_salary = sd(salary_in_usd)
+  )
+
+salary_stats_summary
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+# Histogram for the distribution of salaries
+hist(salary_df$salary_in_usd, main='Salary Distribution', xlab='Salary in USD', breaks=30, col='blue', border='black')
+```
+This histogram shows the salary distribution.
+
+The distribution appears to be positively skewed (right-skewed). Most salaries are concentrated in the lower range, around 200,000, with a tail extending to higher salaries.
+
+The highest frequency of salaries lies within the range of approximately 200,000 to 300,000.
+The salary range spans from close to 0 to 800,000, indicating a wide disparity in salaries.The median salary would likely be lower than the mean due to the positive skew. This distribution suggests a potential income inequality where a small group earns significantly more than the majority.
+
+
+```{r}
+# Calculate average salary by job title
+
+avg_salary_job_title <- aggregate(salary_in_usd ~ job_title, data = salary_df, FUN = mean)
+print(avg_salary_job_title)
+```
+
+This table shows the salary distribution by different job titles.
+
+## Top 20 Average Salary By Job Title
+
+```{r}
+
+# 5. Geographical Analysis
+geo_analysis <- salary_df %>%
+  group_by(company_location) %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    count = n()
+  ) %>%
+  arrange(desc(mean_salary)) %>%
+  top_n(10, mean_salary)  # Extract the top 10 locations based on mean salary
+
+# Convert country codes in 'company_location' to full country names using the 'countrycode' package
+geo_analysis$company_location <- countrycode(geo_analysis$company_location, 
+                                             origin = "iso2c",  # Country code format (ISO 2-letter code)
+                                             destination = "country.name")  # Convert to full country name
+
+# Visualization for geographical analysis (Top 10 with full location names)
+ggplot(geo_analysis, aes(x = reorder(company_location, mean_salary), y = mean_salary)) +
+  geom_bar(stat = "identity", fill = "coral") +
+  theme_minimal() +
+  labs(
+    title = "Top 10 Average Salary by Company Location",
+    x = "Company Location",
+    y = "Average Salary in USD"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1)  # Rotate x-axis labels for better readability
+  )
+
+```
+## Top 10 Average Salary by Company Location
+
+```{r}
+# Calculate average salary by job title
+avg_salary_job_title <- aggregate(salary_in_usd ~ job_title, data = salary_df, FUN = mean)
+
+#select the top 20
+top_20_salary_job_title <- avg_salary_job_title[order(-avg_salary_job_title$salary_in_usd), ][1:20, ]
+
+par(mar = c(5, 8, 3, 2))  # Adjust margins: bottom, left, top, right
+
+# Create a vertical bar plot with smaller font size and reduced figure size
+barplot(top_20_salary_job_title$salary_in_usd,
+        names.arg = top_20_salary_job_title$job_title,
+        main = 'Top 20 Average Salary by Job Title',
+        xlab = 'Average Salary in USD',
+        col = 'lightblue',
+        las = 1, 
+        cex.names = 0.5, 
+        cex.lab = 0.9,    
+        cex.main = 1.2,  
+        cex.axis = 0.6,
+        horiz = TRUE)
+```
+
+
+## Exploratory Data Analysis (EDA)
+
+
+```{r}
+# 2. Salary Distribution by Job Title
+job_title_analysis <- salary_df %>%
+  group_by(job_title) %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    count = n()
+  ) %>%
+  arrange(desc(mean_salary))
+
+job_title_analysis
+```
+
+```{r}
+# 3. Experience Level Analysis
+experience_analysis <- salary_df %>%
+  group_by(experience_level) %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    count = n()
+  ) %>%
+  arrange(desc(mean_salary))
+
+experience_analysis
+
+```
+
+The data clearly illustrates a positive correlation between experience level and average salary in USD. As professionals advance from entry-level to executive roles, their compensation increases significantly, reflecting their growing expertise, responsibilities, and value to organizations. 
+
+```{r}
+# Visualization for experience level
+ggplot(salary_df, aes(x = experience_level, y = salary_in_usd, fill = experience_level)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    title = "Salary Distribution by Experience Level",
+    x = "Experience Level",
+    y = "Salary in USD"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format())
+
+```
+
+Entry Level: The salaries for entry-level positions are concentrated in a lower range, with the majority of salaries falling between $0 and $200,000. There are a few outliers with significantly higher salaries.
+
+Executive Level: Executive-level salaries show a wider range compared to entry-level salaries. The majority of salaries are between $200,000 and $600,000, but there are also outliers with significantly higher salaries.
+Mid Level: Mid-level salaries are concentrated in a range between $200,000 and $400,000. There are fewer outliers compared to executive and entry-level positions.
+
+Senior Level: Senior-level salaries have a similar distribution to mid-level salaries, with the majority falling between $200,000 and $400,000. Outliers are relatively less frequent.
+Additional Insights
+
+The boxplots for executive and entry-level positions have longer whiskers, indicating a larger spread in salaries compared to mid-level and senior-level positions.
+The median salary (the line within the box) appears to be higher for executive-level positions compared to other levels.
+
+The boxplot suggests a positive correlation between experience level and salary, with higher experience levels generally associated with higher salaries.
+
+The outliers in entry and executive level positions might represent individuals with exceptional skills, experience, or responsibilities.
+```{r}
+# 4. Remote Work Analysis
+remote_analysis <- salary_df %>%
+  group_by(remote_ratio) %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    count = n()
+  ) %>%
+  arrange(desc(mean_salary))
+
+remote_analysis
+```
+
+
+```{r}
+# Visualization for remote work
+ggplot(salary_df, aes(x = as.factor(remote_ratio), y = salary_in_usd)) +
+  geom_boxplot(fill = "lightgreen") +
+  theme_minimal() +
+  labs(
+    title = "Salary Distribution by Remote Work Ratio",
+    x = "Remote Work Ratio (%)",
+    y = "Salary in USD"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format())
+
+```
+The boxplot illustrates the distribution of salaries across three different remote work ratios: 0, 50, and 100. The y-axis represents the salary in USD, while the x-axis shows the remote work ratio.
+
+Salary Distribution by Remote Work Ratio
+
+0 (No Remote Work): Salaries for positions with no remote work are concentrated in a range between $0 and $400,000. There are a few outliers with significantly higher salaries.
+50 (50% Remote Work): Salaries for positions with 50% remote work have a similar distribution to those with no remote work, with the majority falling between $0 and $400,000.
+100 (Fully Remote Work): Salaries for fully remote positions show a wider range compared to the other two categories. The majority of salaries are between $0 and $600,000, but there are also outliers with significantly higher salaries.
+
+the boxplot and table only show the distribution of salaries and don't provide information about the specific roles or companies involved. Therefore, it's difficult to draw definitive conclusions about why 50% remote work has the lowest mean and median salary.
+
+
+```{r}
+# 6. Company Size Analysis
+size_analysis <- salary_df %>%
+  group_by(company_size) %>%
+  summarise(
+    mean_salary = mean(salary_in_usd),
+    median_salary = median(salary_in_usd),
+    count = n()
+  ) %>%
+  arrange(desc(mean_salary))
+
+size_analysis
+```
+
+This data shows that how salary related to the company size.
+
+
+```{r}
+# Visualization for company size
+ggplot(salary_df, aes(x = company_size, y = salary_in_usd, fill = company_size)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    title = "Salary Distribution by Company Size",
+    x = "Company Size",
+    y = "Salary in USD"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format())
+```
+Salary Distribution by Company Size
+
+Large (500+ employees): Salaries for large companies are concentrated in a range between $0 and $600,000. There are a few outliers with significantly higher salaries.
+Medium (50-499 employees): Salaries for medium-sized companies have a similar distribution to large companies, with the majority falling between $0 and $600,000.
+Small (<50 employees): Salaries for small companies are concentrated in a lower range, with the majority of salaries falling between $0 and $200,000. There are a few outliers with significantly higher salaries.
+
+```{r}
+# Calculate average salary by year
+avg_salary_by_year <- salary_df %>%
+  group_by(work_year) %>%
+  summarise(average_salary = mean(salary_in_usd))
+
+avg_salary_by_year
+
+```
+```{r}
+# Create the line plot
+ggplot(avg_salary_by_year, aes(x = work_year, y = average_salary)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(
+    title = "Average Salary Trend (2020-2024)",
+    x = "Year",
+    y = "Average Salary (USD)"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(breaks = unique(avg_salary_by_year$work_year)) +
+  geom_text(
+    aes(label = round(average_salary, 2)), 
+    vjust = -1, 
+    color = "dark green"
+  )
+
+
+```
+
+Salary Trend
+
+2020 to 2021: The average salary shows a significant increase from 2020 (96963.02) to 2021 (133131.44).
+2021 to 2022: The average salary continues to increase, reaching 143760.2 in 2022.
+2022 to 2023: There is a slight decrease in the average salary from 2022 to 2023 (143760.2 to 143760.2).
+2023 to 2024: The average salary remains relatively stable in 2024, showing a slight decrease to 143760.2.
+
+
+
+This is how the experience level depends on the job salary.
+
+##Salary Distribution by World map data 
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(maps)
+library(ggthemes)
+library(countrycode)
+library(scales) 
+
+# Load salary data
+salary_data <- read_csv('C:/Users/User/Desktop/R Final Project/DataScience_salaries_2024.csv')
+names(salary_data) <- tolower(names(salary_data))
+
+# Convert and clean data
+salary_data <- salary_data %>%
+  mutate(
+    salary_usd = as.numeric(salary_in_usd),
+    experience_level = factor(experience_level, levels = c('EN', 'MI', 'SE', 'EX'), labels = c('Entry', 'Mid', 'Senior', 'Executive')),
+    employee_residence = countrycode(employee_residence, "iso2c", "country.name")
+  )
+
+
+# Calculate average salary by employee residence
+avg_salary_by_residence <- salary_data %>%
+  group_by(employee_residence) %>%
+  summarise(avg_salary = mean(salary_usd, na.rm = TRUE)) %>%
+  ungroup()
+
+# Load world map data
+world_map <- map_data("world")
+
+# Manual mappings for unmatched countries
+manual_map <- data.frame(
+  employee_residence = c("United States", "United Kingdom", "Czechia", "Hong Kong SAR China", "Bosnia & Herzegovina"),
+  region = c("USA", "UK", "Czech Republic", "Hong Kong", "Bosnia and Herzegovina")
+)
+
+# Update avg_salary_by_residence with manual corrections
+avg_salary_by_residence <- avg_salary_by_residence %>%
+  left_join(manual_map, by = "employee_residence") %>%
+  mutate(employee_residence = ifelse(!is.na(region), region, employee_residence)) %>%
+  select(-region)
+
+# Join with map data
+map_data_merged <- world_map %>%
+  left_join(avg_salary_by_residence, by = c("region" = "employee_residence"))
+
+ggplot(map_data_merged, aes(x = long, y = lat, group = group, fill = avg_salary)) +
+  geom_polygon(color = "transparent", linewidth = 0.5) +  # Removed harsh borders, subtle color separation
+  scale_fill_gradientn(colors = c("#003f5c", "#7a5195", "#ef5675", "#ff764a", "#feb24c"), 
+                       na.value = "lightgray", name = "Avg Salary (USD)", 
+                       labels = scales::comma_format()) + 
+  coord_fixed(1.3) +  
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "#a6cbe3", color = NA),  # Soft, fresh blue background
+    plot.title = element_text(face = "bold", size = 22, hjust = 0.5, color = "#2c3e50"),  # Clear, dark title
+    plot.subtitle = element_text(size = 16, hjust = 0.5, color = "#34495e"),  # Muted subtitle for better hierarchy
+    plot.caption = element_text(size = 12, hjust = 1, color = "#7f8c8d"),  # Soft caption color
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", size = 14, color = "#2c3e50"),
+    legend.text = element_text(size = 12, color = "#2c3e50"),
+    legend.key.width = unit(2, "cm"),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = margin(10, 20, 10, 20)  
+  ) +
+  labs(
+    title = "Global Distribution of Data Science Salaries",
+    subtitle = "Average Data Science Salary by Employee Residence (2024)",
+    caption = "Source: DataScience_salaries_2024.csv"
+  ) 
+
+```
+The map reveals significant regional variations in average data science salaries. Countries in North America (particularly the United States and Canada), Western Europe (countries like Germany, Switzerland, and the United Kingdom), and some parts of Asia (Singapore, Australia, and Israel) tend to have higher average salaries compared to other regions.
+
+Countries in Eastern Europe, South America, and parts of Asia (India, China) generally show lower average data science salaries. This could be attributed to various factors like cost of living, economic development, and market demand for data science professionals.
+
+There are a few countries with exceptionally high or low average salaries that might be outliers due to various reasons like data quality, small sample sizes, or unique market conditions.
+
+
+## Average salary by continent
+
+
+```{r}
+
+# Define the continent map
+continent_map <- c(
+  # Americas
+  "US" = "North America", "CA" = "North America", "MX" = "North America", 
+  "PR" = "North America", "BR" = "South America", "CO" = "South America", 
+  "AR" = "South America", "CL" = "South America", "EC" = "South America", 
+  "HN" = "North America",
+  
+  # Europe
+  "GB" = "Europe", "DE" = "Europe", "FR" = "Europe", "ES" = "Europe", 
+  "PT" = "Europe", "IT" = "Europe", "NL" = "Europe", "SE" = "Europe", 
+  "NO" = "Europe", "DK" = "Europe", "FI" = "Europe", "PL" = "Europe", 
+  "UA" = "Europe", "RU" = "Europe", "CH" = "Europe", "IE" = "Europe", 
+  "CZ" = "Europe", "GR" = "Europe", "BE" = "Europe", "RO" = "Europe", 
+  "HR" = "Europe", "SI" = "Europe", "LT" = "Europe", "LV" = "Europe", 
+  "EE" = "Europe", "AT" = "Europe", "MT" = "Europe", "LU" = "Europe", 
+  "BA" = "Europe", "AD" = "Europe", "GI" = "Europe",
+  
+  # Asia
+  "IN" = "Asia", "JP" = "Asia", "CN" = "Asia", "SG" = "Asia", 
+  "HK" = "Asia", "TH" = "Asia", "PH" = "Asia", "KR" = "Asia", 
+  "MY" = "Asia", "ID" = "Asia", "VN" = "Asia", "IL" = "Asia", 
+  "TR" = "Asia", "QA" = "Asia", "AE" = "Asia", "SA" = "Asia", 
+  "IR" = "Asia", "IQ" = "Asia", "LB" = "Asia", "AM" = "Asia", 
+  "OM" = "Asia", "PK" = "Asia", "KE" = "Asia",
+  
+  # Oceania
+  "AU" = "Oceania", "NZ" = "Oceania",
+  
+  # Africa
+  "ZA" = "Africa", "NG" = "Africa", "EG" = "Africa", "DZ" = "Africa", 
+  "GH" = "Africa", "MU" = "Africa",
+  
+  # Others/Uncertain
+  "CF" = "Other", "BS" = "Other", "MD" = "Other"
+)
+
+# Map countries to continents
+salary_df$continent <- continent_map[salary_df$company_location]
+
+# Calculate average salary by continent
+average_salary <- aggregate(salary_in_usd ~ continent, data = salary_df, FUN = mean)
+
+# Create the bar chart
+ggplot(average_salary, aes(x = continent, y = salary_in_usd, fill = continent)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Average Salary by Continent",
+    x = "Continent",
+    y = "Average Salary (USD)"
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+## T-test for comparing continents
+
+```{r}
+salary_data <- salary_df  
+
+# Continent mapping (already defined earlier in the code)
+continent_map <- c(
+  # Americas
+  "US" = "North America", "CA" = "North America", "MX" = "North America", 
+  "PR" = "North America", "BR" = "South America", "CO" = "South America", 
+  "AR" = "South America", "CL" = "South America", "EC" = "South America", 
+  "HN" = "North America",
+  
+  # Europe
+  "GB" = "Europe", "DE" = "Europe", "FR" = "Europe", "ES" = "Europe", 
+  "PT" = "Europe", "IT" = "Europe", "NL" = "Europe", "SE" = "Europe", 
+  "NO" = "Europe", "DK" = "Europe", "FI" = "Europe", "PL" = "Europe", 
+  "UA" = "Europe", "RU" = "Europe", "CH" = "Europe", "IE" = "Europe", 
+  "CZ" = "Europe", "GR" = "Europe", "BE" = "Europe", "RO" = "Europe", 
+  "HR" = "Europe", "SI" = "Europe", "LT" = "Europe", "LV" = "Europe", 
+  "EE" = "Europe", "AT" = "Europe", "MT" = "Europe", "LU" = "Europe", 
+  "BA" = "Europe", "AD" = "Europe", "GI" = "Europe",
+  
+  # Asia
+  "IN" = "Asia", "JP" = "Asia", "CN" = "Asia", "SG" = "Asia", 
+  "HK" = "Asia", "TH" = "Asia", "PH" = "Asia", "KR" = "Asia", 
+  "MY" = "Asia", "ID" = "Asia", "VN" = "Asia", "IL" = "Asia", 
+  "TR" = "Asia", "QA" = "Asia", "AE" = "Asia", "SA" = "Asia", 
+  "IR" = "Asia", "IQ" = "Asia", "LB" = "Asia", "AM" = "Asia", 
+  "OM" = "Asia", "PK" = "Asia", "KE" = "Asia",
+  
+  # Oceania
+  "AU" = "Oceania", "NZ" = "Oceania",
+  
+  # Africa
+  "ZA" = "Africa", "NG" = "Africa", "EG" = "Africa", "DZ" = "Africa", 
+  "GH" = "Africa", "MU" = "Africa",
+  
+  # Others/Uncertain
+  "CF" = "Other", "BS" = "Other", "MD" = "Other"
+)
+
+# Ensure the continent column is added
+salary_data <- salary_data %>%
+  mutate(continent = continent_map[employee_residence])
+
+# Updated compare_continents function with error handling
+compare_continents <- function(data) {
+  # Print data info for debugging
+  print(paste("Total rows:", nrow(data)))
+  print(paste("Unique continents:", paste(unique(data$continent), collapse=", ")))
+  
+  # Get unique continents with enough observations
+  continents <- data %>% 
+    group_by(continent) %>% 
+    filter(n() > 1) %>% 
+    pull(continent) %>% 
+    unique()
+  
+  print(paste("Continents with enough observations:", paste(continents, collapse=", ")))
+  
+  # Store comparison results
+  comparisons <- list()
+  
+  # Pairwise comparisons
+  for (i in 1:(length(continents)-1)) {
+    for (j in (i+1):length(continents)) {
+      cont1 <- continents[i]
+      cont2 <- continents[j]
+      
+      cont1_salaries <- data %>% 
+        filter(continent == cont1) %>% 
+        pull(salary_in_usd)
+      
+      cont2_salaries <- data %>% 
+        filter(continent == cont2) %>% 
+        pull(salary_in_usd)
+      
+      # Check if we have enough observations
+      if (length(cont1_salaries) > 1 && length(cont2_salaries) > 1) {
+        # Perform Welch's t-test (doesn't assume equal variances)
+        test_result <- t.test(cont1_salaries, cont2_salaries)
+        
+        comparisons[[paste(cont1, "vs", cont2)]] <- list(
+          p_value = test_result$p.value,
+          mean_diff = mean(cont1_salaries) - mean(cont2_salaries),
+          cont1_mean = mean(cont1_salaries),
+          cont2_mean = mean(cont2_salaries)
+        )
+      } else {
+        comparisons[[paste(cont1, "vs", cont2)]] <- "Not enough observations for comparison"
+      }
+    }
+  }
+  
+  return(comparisons)
+}
+
+# Perform continent comparisons
+continent_comparisons <- compare_continents(salary_data)
+print("\nContinent Salary Comparisons:")
+print(continent_comparisons)
+
+```
+T-test analysis shows the result of comparing contients and salary variation.
+
+The analysis conducted a comprehensive salary comparison across different continents using t-tests, revealing significant variations in average salaries. North America stands out with the highest mean salary at $152,662, substantially higher than other regions. Europe follows with an average of $83,766, while Asia ($58,045) and South America ($67,011) have lower average salaries. Many comparisons showed statistically significant differences (indicated by very low p-values), particularly between regions like North America and other continents. For instance, the comparison between North America and Asia shows an extremely low p-value (2.37e-52), indicating a highly significant difference of about $94,618 in mean salaries. Some regional comparisons, such as between South America and Other, or Africa and Other, did not show statistically significant salary differences. These findings suggest substantial economic disparities in salary levels across different global regions, with North American professionals earning notably higher wages compared to counterparts in other continents.
+
+
+## Model Building
+
+```{r}
+# Regression model (Multiple)
+# Load necessary library for encoding
+library(dplyr)
+
+# Convert categorical variables to factors
+salary_data <- salary_df %>% 
+  mutate(
+    experience_level = as.factor(experience_level),
+    employment_type = as.factor(employment_type),
+    job_title = as.factor(job_title),
+    company_size = as.factor(company_size)
+  )
+
+# Check the structure of the modified dataset
+str(salary_data)
+
+# Load necessary library for splitting the data
+# install.packages("caret")
+library(caret)
+
+set.seed(123)
+
+# Splitting the data
+# training (80%) and testing (20%) sets
+train_index <- createDataPartition(salary_data$salary_in_usd, p = 0.8, list = FALSE)
+train_data <- salary_data[train_index, ]
+test_data <- salary_data[-train_index, ]
+
+# Fit a multiple linear regression model
+model <- lm(salary_in_usd ~ experience_level + job_title + employment_type + remote_ratio + company_size, data = train_data)
+
+# Summary of the model
+model_summary <- summary(model)
+print(model_summary)
+####################################################
+
+# Testing for making predictions
+predictions <- predict(model, newdata = test_data)
+
+
+##############################################################################
+
+# Making justification
+
+# Identify unique job titles in both training and test datasets
+unique_train_titles <- unique(train_data$job_title)
+unique_test_titles <- unique(test_data$job_title)
+
+# Find job titles in the test_set that are not in training
+new_titles <- setdiff(unique_test_titles, unique_train_titles)
+
+# Print the new job titles
+print(new_titles)
+
+#########################################################33
+
+# Remove job titles from testset not present in the train_set
+filtered_test_data <- test_data[!(test_data$job_title %in% new_titles), ]
+
+# Prediction
+filtered_predictions <- predict(model, newdata = filtered_test_data)
+
+# Combine actual and predicted values for comparison
+filtered_results <- data.frame(Actual = filtered_test_data$salary_in_usd, Predicted = filtered_predictions)
+
+# Performance metrics
+filtered_performance_metrics <- postResample(pred = filtered_predictions, obs = filtered_test_data$salary_in_usd)
+
+# Results and performance metrics
+print(head(filtered_results))
+print(filtered_performance_metrics)
+
+#####################################
+
+# Create a scatter plot
+# Actual vs predicted salaries
+plot <- ggplot(filtered_results, aes(x = Actual, y = Predicted)) + 
+  geom_point(alpha = 0.5) + 
+  geom_abline(slope = 1, intercept = 0, color = 'red') + 
+  labs(title = 'Actual vs Predicted Salaries (Without Job Title)', x = 'Actual Salary (USD)', y = 'Predicted Salary (USD)') + 
+  theme_minimal()
+
+print(plot)
+
+```
+
+First, we load the necessary libraries such as dplyr and caret for encoding.
+Then, convert categorical variables to factors to create a regression model.
+Next, we split our data into train set(80%) and test set(20%) for model training and predictions.
+After that, we fit our model with multiple features: salary_in_usd (target), experience_level, job_title, employment_type, remote_ratio and company size.
+While training model, model summary is generated.
+After training our model, it is time for testing for evaluation and performance.
+During our first time testing, we faced some ERROR regarding job_title columns as some job_titles from test_set are not included in train_set.
+Therefore, we tried to make some justification and outlier detection helping our testing work well.
+During testing process, our model results (Actual salary compared with Model-predicted salary) and performance metrics of our model such as RMSE, Rsquared and MAE.
+Hence, we visualized the results with scatter plot to better understand our model performance.
